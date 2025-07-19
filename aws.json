@@ -1,0 +1,216 @@
+{
+  "name": "AWS IAM Auto Provisioning",
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "additionalFields": {
+          "criteria": {
+            "searchCriteria": "UNSEEN"
+          }
+        }
+      },
+      "id": "1",
+      "name": "IMAP Email Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "credentials": {
+        "imap": {
+          "id": "YOUR_IMAP_CREDENTIAL_ID",
+          "name": "Your Email IMAP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-requests",
+        "text": "AWS Access Request Received:\n\nFrom: {{$json[\"from\"]}}\nSubject: {{$json[\"subject\"]}}\n\nApprove or Reject?",
+        "attachments": [],
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": "Approve",
+                  "action_id": "approve"
+                },
+                {
+                  "type": "button",
+                  "text": "Reject",
+                  "action_id": "reject"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Send Slack Message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "3",
+      "name": "Slack Interaction Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [600, 300],
+      "webhookId": "your_webhook_id"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action_id}}",
+              "operation": "equals",
+              "value2": "approve"
+            }
+          ]
+        }
+      },
+      "id": "4",
+      "name": "Check If Approved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "service": "iam",
+        "operation": "createUser",
+        "userName": "aws-n8n-user-{{$json['ts']}}"
+      },
+      "id": "5",
+      "name": "Create IAM User",
+      "type": "n8n-nodes-base.aws",
+      "typeVersion": 1,
+      "position": [1000, 200],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_AWS_CREDENTIAL_ID",
+          "name": "AWS Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-requests",
+        "text": "✅ AWS User Created: {{$node['Create IAM User'].json['User']['UserName']}}"
+      },
+      "id": "6",
+      "name": "Slack Notify Success",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1200, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-requests",
+        "text": "❌ AWS Access Request Rejected."
+      },
+      "id": "7",
+      "name": "Slack Notify Rejected",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1000, 400],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "IMAP Email Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Slack Interaction Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Interaction Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check If Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Approved": {
+      "main": [
+        [
+          {
+            "node": "Create IAM User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Notify Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IAM User": {
+      "main": [
+        [
+          {
+            "node": "Slack Notify Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "tags": [
+    {
+      "name": "aws"
+    },
+    {
+      "name": "devops"
+    }
+  ]
+}
