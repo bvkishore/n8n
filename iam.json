@@ -1,0 +1,170 @@
+{
+  "name": "IAM Access Key Rotation",
+  "nodes": [
+    {
+      "id": "cron",
+      "parameters": {
+        "triggerTimes": [{ "mode": "everyDay" }]
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 200]
+    },
+    {
+      "id": "listUsers",
+      "parameters": {
+        "operation": "list",
+        "resource": "user"
+      },
+      "name": "List IAM Users",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [400, 200],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "id": "splitUsers",
+      "parameters": {
+        "fieldToSplit": "Users",
+        "options": {}
+      },
+      "name": "Split Users",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [600, 200]
+    },
+    {
+      "id": "listAccessKeys",
+      "parameters": {
+        "operation": "listAccessKeys",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}"
+      },
+      "name": "List Access Keys",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [800, 200],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "id": "splitKeys",
+      "parameters": {
+        "fieldToSplit": "AccessKeyMetadata",
+        "options": {}
+      },
+      "name": "Split Access Keys",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "id": "checkAge",
+      "parameters": {
+        "conditions": {
+          "dateTime": [
+            {
+              "value1": "={{ new Date($json.CreateDate).getTime() }}",
+              "value2": "={{ Date.now() - (90 * 24 * 60 * 60 * 1000) }}"
+            }
+          ]
+        }
+      },
+      "name": "Check if Key Older than 90 Days",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "id": "createAccessKey",
+      "parameters": {
+        "operation": "createAccessKey",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}"
+      },
+      "name": "Create New Access Key",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [1400, 100],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "id": "deactivateOldKey",
+      "parameters": {
+        "operation": "updateAccessKey",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}",
+        "accessKeyId": "={{ $json.AccessKeyId }}",
+        "status": "Inactive"
+      },
+      "name": "Deactivate Old Key",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [1400, 300],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "id": "sendSlack",
+      "parameters": {
+        "channel": "#devops-alerts",
+        "text": "IAM Key rotated for user: {{ $json.UserName }}\nNew Key: {{ $json.AccessKey.AccessKeyId }}\nSecret: {{ $json.AccessKey.SecretAccessKey }}"
+      },
+      "name": "Send Slack Message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1600, 100],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CRED_ID",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [["List IAM Users"]]
+    },
+    "List IAM Users": {
+      "main": [["Split Users"]]
+    },
+    "Split Users": {
+      "main": [["List Access Keys"]]
+    },
+    "List Access Keys": {
+      "main": [["Split Access Keys"]]
+    },
+    "Split Access Keys": {
+      "main": [["Check if Key Older than 90 Days"]]
+    },
+    "Check if Key Older than 90 Days": {
+      "main": [
+        ["Create New Access Key", "true"],
+        ["Deactivate Old Key", "true"]
+      ]
+    },
+    "Create New Access Key": {
+      "main": [["Send Slack Message"]]
+    }
+  }
+}
