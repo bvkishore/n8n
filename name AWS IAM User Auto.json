@@ -1,0 +1,126 @@
+{
+  "name": "AWS IAM User Auto-Provisioning",
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "subject": "AWS Access Request",
+        "options": {}
+      },
+      "name": "IMAP Email Trigger",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "imap": {
+          "id": "imap-credentials",
+          "name": "IMAP Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-alerts",
+        "text": "New AWS IAM Access Request from {{$json[\"from\"]}}.\nApprove below.",
+        "attachments": [
+          {
+            "fallback": "Approval needed",
+            "callback_id": "iam_request_approval",
+            "actions": [
+              {
+                "name": "approve",
+                "text": "Approve",
+                "type": "button",
+                "value": "approve"
+              },
+              {
+                "name": "reject",
+                "text": "Reject",
+                "type": "button",
+                "value": "reject"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Send Slack Approval",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-credentials",
+          "name": "Slack Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "event": "interactive_message"
+      },
+      "name": "Slack Button Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "webhookId": "webhook-iam-approval"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "userName": "n8n-{{$json[\"from\"]}}",
+        "tagsUi": {
+          "tagValues": [
+            {
+              "key": "RequestedBy",
+              "value": "{{$json[\"from\"]}}"
+            }
+          ]
+        }
+      },
+      "name": "Create IAM User",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "aws": {
+          "id": "aws-credentials",
+          "name": "AWS Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@example.com",
+        "toEmail": "{{$json[\"from\"]}}",
+        "subject": "AWS IAM Access Approved",
+        "text": "Your IAM user has been created successfully: {{$node[\"Create IAM User\"].json[\"user\"]}}"
+      },
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "SMTP Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "IMAP Email Trigger": {
+      "main": [[{"node": "Send Slack Approval", "type": "main", "index": 0}]]
+    },
+    "Send Slack Approval": {
+      "main": [[{"node": "Slack Button Trigger", "type": "main", "index": 0}]]
+    },
+    "Slack Button Trigger": {
+      "main": [[{"node": "Create IAM User", "type": "main", "index": 0}]]
+    },
+    "Create IAM User": {
+      "main": [[{"node": "Send Confirmation Email", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false
+}
+
