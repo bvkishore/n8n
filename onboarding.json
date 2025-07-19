@@ -1,43 +1,34 @@
 {
+  "name": "Onboard AWS Developer (Email Trigger)",
   "nodes": [
     {
       "parameters": {
         "email": "devops+onboard@your-domain.com",
-        "password": "YOUR_EMAIL_PASSWORD",
+        "password": "your-password",
         "host": "imap.your-domain.com",
         "port": 993,
         "secure": true,
         "mailbox": "INBOX",
-        "downloadAttachments": false,
-        "options": {}
+        "downloadAttachments": false
       },
-      "id": "1",
       "name": "IMAP Email",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 1,
-      "position": [300, 100]
+      "position": [200, 300],
+      "credentials": {
+        "emailImap": {
+          "id": "YOUR_IMAP_CREDENTIAL_ID"
+        }
+      }
     },
     {
       "parameters": {
-        "functionCode": "const emailBody = $json.text;
-
-const usernameMatch = emailBody.match(/Username:\s*(\S+)/);
-const emailMatch = emailBody.match(/Email:\s*(\S+)/);
-
-return [
-  {
-    json: {
-      UserName: usernameMatch ? usernameMatch[1] : '',
-      UserEmail: emailMatch ? emailMatch[1] : ''
-    }
-  }
-];"
+        "functionCode": "const emailBody = $json.text;\n\nconst username = emailBody.match(/Username:\\s*(\\S+)/);\nconst email = emailBody.match(/Email:\\s*(\\S+)/);\n\nreturn [{\n  json: {\n    UserName: username ? username[1] : '',\n    UserEmail: email ? email[1] : ''\n  }\n}];"
       },
-      "id": "2",
       "name": "Parse Email",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
-      "position": [500, 100]
+      "position": [400, 300]
     },
     {
       "parameters": {
@@ -45,11 +36,10 @@ return [
         "operation": "create",
         "userName": "={{$json.UserName}}"
       },
-      "id": "3",
-      "name": "AWS IAM Create User",
+      "name": "Create IAM User",
       "type": "n8n-nodes-base.awsIam",
       "typeVersion": 1,
-      "position": [700, 100],
+      "position": [600, 300],
       "credentials": {
         "aws": {
           "id": "YOUR_AWS_CREDENTIAL_ID"
@@ -62,11 +52,10 @@ return [
         "operation": "create",
         "userName": "={{$json.UserName}}"
       },
-      "id": "4",
-      "name": "AWS IAM Create Access Key",
+      "name": "Create Access Key",
       "type": "n8n-nodes-base.awsIam",
       "typeVersion": 1,
-      "position": [900, 100],
+      "position": [800, 300],
       "credentials": {
         "aws": {
           "id": "YOUR_AWS_CREDENTIAL_ID"
@@ -80,11 +69,10 @@ return [
         "userName": "={{$json.UserName}}",
         "policyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"
       },
-      "id": "5",
-      "name": "AWS IAM Attach Policy",
+      "name": "Attach Policy",
       "type": "n8n-nodes-base.awsIam",
       "typeVersion": 1,
-      "position": [1100, 100],
+      "position": [1000, 300],
       "credentials": {
         "aws": {
           "id": "YOUR_AWS_CREDENTIAL_ID"
@@ -96,13 +84,12 @@ return [
         "fromEmail": "noreply@your-domain.com",
         "toEmail": "={{$json.UserEmail}}",
         "subject": "Your AWS IAM Credentials",
-        "text": "Hello {{$json.UserName}},\n\nHere are your AWS credentials:\nAccess Key ID: {{$json.AccessKey.AccessKeyId}}\nSecret Access Key: {{$json.AccessKey.SecretAccessKey}}\n\nUse them with the AWS CLI or SDK.\n\nRegards,\nDevOps Team"
+        "text": "Hello {{$json.UserName}},\\n\\nHere are your AWS credentials:\\nAccess Key ID: {{$json.AccessKey.AccessKeyId}}\\nSecret Access Key: {{$json.AccessKey.SecretAccessKey}}\\n\\nRegards,\\nDevOps Team"
       },
-      "id": "6",
       "name": "Send Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
-      "position": [1300, 100],
+      "position": [1200, 300],
       "credentials": {
         "smtp": {
           "id": "YOUR_SMTP_CREDENTIAL_ID"
@@ -114,13 +101,12 @@ return [
         "resource": "message",
         "operation": "post",
         "channel": "#devops-onboarding",
-        "text": "✅ New AWS IAM user {{$json.UserName}} created and credentials sent to {{$json.UserEmail}}"
+        "text": "✅ New AWS IAM user {{$json.UserName}} created. Credentials sent to {{$json.UserEmail}}"
       },
-      "id": "7",
       "name": "Slack Notify",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [1500, 100],
+      "position": [1400, 300],
       "credentials": {
         "slackApi": {
           "id": "YOUR_SLACK_CREDENTIAL_ID"
@@ -129,23 +115,72 @@ return [
     }
   ],
   "connections": {
-    "1": {
-      "main": [[{"node": "2", "type": "main", "index": 0}]]
+    "IMAP Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "2": {
-      "main": [[{"node": "3", "type": "main", "index": 0}]]
+    "Parse Email": {
+      "main": [
+        [
+          {
+            "node": "Create IAM User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "3": {
-      "main": [[{"node": "4", "type": "main", "index": 0}]]
+    "Create IAM User": {
+      "main": [
+        [
+          {
+            "node": "Create Access Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "4": {
-      "main": [[{"node": "5", "type": "main", "index": 0}]]
+    "Create Access Key": {
+      "main": [
+        [
+          {
+            "node": "Attach Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "5": {
-      "main": [[{"node": "6", "type": "main", "index": 0}]]
+    "Attach Policy": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "6": {
-      "main": [[{"node": "7", "type": "main", "index": 0}]]
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Slack Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
-  }
+  },
+  "active": false
 }
