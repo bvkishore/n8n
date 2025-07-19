@@ -1,43 +1,28 @@
 {
-  "name": "IAM Key Rotation",
+  "name": "IAM Key Rotation (Safe Import)",
   "nodes": [
     {
-      "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "everyDay"
-          }
-        ]
-      },
-      "name": "Cron",
-      "type": "n8n-nodes-base.cron",
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
       "typeVersion": 1,
-      "position": [200, 200]
+      "position": [200, 300]
     },
     {
       "parameters": {
-        "operation": "list",
-        "resource": "user"
-      },
-      "name": "List Users",
-      "type": "n8n-nodes-base.awsIam",
-      "typeVersion": 1,
-      "position": [400, 200],
-      "credentials": {
-        "aws": {
-          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
-          "name": "AWS Credential"
+        "values": {
+          "string": [
+            {
+              "name": "UserName",
+              "value": "demo-user"
+            }
+          ]
         }
-      }
-    },
-    {
-      "parameters": {
-        "fieldToSplit": "Users"
       },
-      "name": "Split Users",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 1,
-      "position": [600, 200]
+      "name": "Set User",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [400, 300]
     },
     {
       "parameters": {
@@ -48,7 +33,7 @@
       "name": "List Access Keys",
       "type": "n8n-nodes-base.awsIam",
       "typeVersion": 1,
-      "position": [800, 200],
+      "position": [600, 300],
       "credentials": {
         "aws": {
           "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
@@ -58,32 +43,20 @@
     },
     {
       "parameters": {
-        "fieldToSplit": "AccessKeyMetadata"
-      },
-      "name": "Split Keys",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 1,
-      "position": [1000, 200]
-    },
-    {
-      "parameters": {
         "conditions": {
-          "number": [],
-          "string": [],
-          "boolean": [],
           "dateTime": [
             {
-              "value1": "={{ new Date($json.CreateDate).getTime() }}",
+              "value1": "={{ new Date($json.AccessKeyMetadata[0].CreateDate).getTime() }}",
               "operation": "smaller",
               "value2": "={{ Date.now() - (90 * 24 * 60 * 60 * 1000) }}"
             }
           ]
         }
       },
-      "name": "Check Key Age",
+      "name": "Key Older than 90 Days?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1200, 200]
+      "position": [800, 300]
     },
     {
       "parameters": {
@@ -94,26 +67,7 @@
       "name": "Create New Access Key",
       "type": "n8n-nodes-base.awsIam",
       "typeVersion": 1,
-      "position": [1400, 100],
-      "credentials": {
-        "aws": {
-          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
-          "name": "AWS Credential"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "updateAccessKey",
-        "resource": "accessKey",
-        "userName": "={{ $json.UserName }}",
-        "accessKeyId": "={{ $json.AccessKeyId }}",
-        "status": "Inactive"
-      },
-      "name": "Deactivate Old Key",
-      "type": "n8n-nodes-base.awsIam",
-      "typeVersion": 1,
-      "position": [1400, 300],
+      "position": [1000, 200],
       "credentials": {
         "aws": {
           "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
@@ -124,12 +78,12 @@
     {
       "parameters": {
         "channel": "#devops-alerts",
-        "text": "Rotated IAM key for user {{$json.UserName}}.\nNew Access Key ID: {{$json.AccessKey.AccessKeyId}}"
+        "text": "✅ IAM key rotated for *{{ $json.UserName }}*.\nNew Access Key ID: *{{ $json.AccessKey.AccessKeyId }}*"
       },
-      "name": "Slack Notification",
+      "name": "Slack Notify",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [1600, 100],
+      "position": [1200, 200],
       "credentials": {
         "slackApi": {
           "id": "REPLACE_WITH_SLACK_CRED_ID",
@@ -139,29 +93,20 @@
     }
   ],
   "connections": {
-    "Cron": {
-      "main": [["List Users"]]
+    "Start": {
+      "main": [["Set User"]]
     },
-    "List Users": {
-      "main": [["Split Users"]]
-    },
-    "Split Users": {
+    "Set User": {
       "main": [["List Access Keys"]]
     },
     "List Access Keys": {
-      "main": [["Split Keys"]]
+      "main": [["Key Older than 90 Days?"]]
     },
-    "Split Keys": {
-      "main": [["Check Key Age"]]
-    },
-    "Check Key Age": {
-      "main": [
-        ["Create New Access Key", "true"],
-        ["Deactivate Old Key", "true"]
-      ]
+    "Key Older than 90 Days?": {
+      "main": [["Create New Access Key", "true"]]
     },
     "Create New Access Key": {
-      "main": [["Slack Notification"]]
+      "main": [["Slack Notify"]]
     }
   }
 }
