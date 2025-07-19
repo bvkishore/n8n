@@ -1,0 +1,153 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "options": {
+          "exposeHeaders": true
+        }
+      },
+      "name": "Check Email",
+      "type": "n8n-nodes-base.imapEmail",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "credentials": {
+        "imap": {
+          "id": "YOUR_IMAP_CRED_ID",
+          "name": "IMAP Email"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-access",
+        "text": "=Access request received from {{$json[\"from\"]}}:\n\n{{$json[\"subject\"]}}\n\nApprove IAM User creation?",
+        "attachments": [],
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": "Approve",
+                  "style": "primary",
+                  "action_id": "approve_iam"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "name": "Send Slack Approval",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [300, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CRED_ID",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "={{$node[\"Send Slack Approval\"].json[\"channel\"]}}",
+        "actionId": "approve_iam"
+      },
+      "name": "Slack Button Approval",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CRED_ID",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "userName": "={{$json[\"subject\"].replace('Request Access for ', '')}}"
+      },
+      "name": "Create IAM User",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [700, 300],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_AWS_CRED_ID",
+          "name": "AWS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "admin@yourdomain.com",
+        "toEmail": "={{$node[\"Check Email\"].json[\"from\"]}}",
+        "subject": "IAM User Created",
+        "text": "Hi,\n\nYour IAM user has been successfully created. Please contact admin for login credentials."
+      },
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_SMTP_CRED_ID",
+          "name": "SMTP Email"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Check Email": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Approval": {
+      "main": [
+        [
+          {
+            "node": "Slack Button Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Button Approval": {
+      "main": [
+        [
+          {
+            "node": "Create IAM User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IAM User": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "name": "IAM User Auto Provisioning",
+  "settings": {}
+}
+
