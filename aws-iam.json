@@ -1,42 +1,37 @@
 {
   "nodes": [
     {
+      "id": "start",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "setUserName",
+      "name": "Set UserName",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [400, 300],
       "parameters": {
-        "authentication": "aws",
-        "requestMethod": "POST",
-        "url": "https://iam.amazonaws.com/",
-        "queryParametersUi": {
-          "parameter": [
-            {
-              "name": "Action",
-              "value": "ListAccessKeys"
-            },
-            {
-              "name": "Version",
-              "value": "2010-05-08"
-            },
+        "values": {
+          "string": [
             {
               "name": "UserName",
-              "value": "={{ $json.UserName }}"
+              "value": "devops-user"
             }
           ]
         },
         "options": {}
-      },
+      }
+    },
+    {
       "id": "listAccessKeys",
       "name": "List Access Keys",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [
-        500,
-        300
-      ],
-      "credentials": {
-        "aws": {
-          "id": "__YOUR_AWS_CREDENTIAL_ID__",
-          "name": "AWS IAM Credential"
-        }
-      }
-    }
-  ]
-}
+      "position": [600, 300],
+      "parameters": {
+        "authentication": "aws",
+        "requestMethod": "POST",
+        "url": "https://iam.amazona
