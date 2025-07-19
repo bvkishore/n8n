@@ -1,0 +1,167 @@
+{
+  "name": "IAM Key Rotation",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyDay"
+          }
+        ]
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [200, 200]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "resource": "user"
+      },
+      "name": "List Users",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [400, 200],
+      "credentials": {
+        "aws": {
+          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplit": "Users"
+      },
+      "name": "Split Users",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "operation": "listAccessKeys",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}"
+      },
+      "name": "List Access Keys",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [800, 200],
+      "credentials": {
+        "aws": {
+          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplit": "AccessKeyMetadata"
+      },
+      "name": "Split Keys",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [],
+          "string": [],
+          "boolean": [],
+          "dateTime": [
+            {
+              "value1": "={{ new Date($json.CreateDate).getTime() }}",
+              "operation": "smaller",
+              "value2": "={{ Date.now() - (90 * 24 * 60 * 60 * 1000) }}"
+            }
+          ]
+        }
+      },
+      "name": "Check Key Age",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "operation": "createAccessKey",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}"
+      },
+      "name": "Create New Access Key",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [1400, 100],
+      "credentials": {
+        "aws": {
+          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "updateAccessKey",
+        "resource": "accessKey",
+        "userName": "={{ $json.UserName }}",
+        "accessKeyId": "={{ $json.AccessKeyId }}",
+        "status": "Inactive"
+      },
+      "name": "Deactivate Old Key",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [1400, 300],
+      "credentials": {
+        "aws": {
+          "id": "REPLACE_WITH_YOUR_AWS_CRED_ID",
+          "name": "AWS Credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#devops-alerts",
+        "text": "Rotated IAM key for user {{$json.UserName}}.\nNew Access Key ID: {{$json.AccessKey.AccessKeyId}}"
+      },
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1600, 100],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_SLACK_CRED_ID",
+          "name": "Slack API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron": {
+      "main": [["List Users"]]
+    },
+    "List Users": {
+      "main": [["Split Users"]]
+    },
+    "Split Users": {
+      "main": [["List Access Keys"]]
+    },
+    "List Access Keys": {
+      "main": [["Split Keys"]]
+    },
+    "Split Keys": {
+      "main": [["Check Key Age"]]
+    },
+    "Check Key Age": {
+      "main": [
+        ["Create New Access Key", "true"],
+        ["Deactivate Old Key", "true"]
+      ]
+    },
+    "Create New Access Key": {
+      "main": [["Slack Notification"]]
+    }
+  }
+}
