@@ -1,0 +1,175 @@
+{
+  "name": "Automated AWS Access Request & Provisioning",
+  "nodes": [
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "nothing",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Email Trigger",
+      "type": "n8n-nodes-base.imapEmail",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#aws-approvals",
+        "text": "Access request for AWS received from {{ $json[\"from\"] }}.\n\nRequested Access:\n{{ $json[\"text\"] }}\n\nPlease approve or reject.",
+        "attachments": [],
+        "blocksUi": {
+          "blocksValues": [
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": "Approve",
+                  "action_id": "approve",
+                  "url": "https://your-n8n-domain/webhook/aws-access-approve"
+                },
+                {
+                  "type": "button",
+                  "text": "Reject",
+                  "action_id": "reject",
+                  "url": "https://your-n8n-domain/webhook/aws-access-reject"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Send Slack Approval Request",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {},
+      "id": "3",
+      "name": "Wait for Approval Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "webhookPath": "aws-access-approve",
+      "httpMethod": "GET",
+      "position": [500, 200]
+    },
+    {
+      "parameters": {},
+      "id": "4",
+      "name": "Wait for Rejection Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "webhookPath": "aws-access-reject",
+      "httpMethod": "GET",
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [\n  {\n    json: {\n      username: \"temp-user-\" + Math.floor(Math.random() * 10000),\n      policy: \"ReadOnlyAccess\",\n      expiryHours: 4\n    }\n  }\n];"
+      },
+      "id": "5",
+      "name": "Prepare IAM Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [700, 200]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "userName": "={{$json[\"username\"]}}",
+        "policyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      },
+      "id": "6",
+      "name": "Create IAM User",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "channel": "={{$json[\"from\"]}}",
+        "subject": "Access Approved",
+        "text": "Your AWS IAM user has been created.\n\nUsername: {{$json[\"username\"]}}\nExpires in 4 hours.\n\nCredentials will be sent via secure channel."
+      },
+      "id": "7",
+      "name": "Notify via Email (Approved)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "channel": "={{$json[\"from\"]}}",
+        "subject": "Access Request Rejected",
+        "text": "Your AWS access request has been rejected by the team."
+      },
+      "id": "8",
+      "name": "Notify via Email (Rejected)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [700, 400]
+    }
+  ],
+  "connections": {
+    "Email Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Approval Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare IAM Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Rejection Webhook": {
+      "main": [
+        [
+          {
+            "node": "Notify via Email (Rejected)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare IAM Input": {
+      "main": [
+        [
+          {
+            "node": "Create IAM User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IAM User": {
+      "main": [
+        [
+          {
+            "node": "Notify via Email (Approved)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false
+}
+
