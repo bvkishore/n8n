@@ -1,0 +1,192 @@
+{
+  "nodes": [
+    {
+      "id": "IMAP_Email_Trigger",
+      "name": "IMAP Email Trigger",
+      "type": "n8n-nodes-base.imapEmail",
+      "typeVersion": 1,
+      "position": [200, 100],
+      "parameters": {
+        "mailbox": "INBOX",
+        "searchCriteria": "UNSEEN",
+        "downloadAttachments": false
+      },
+      "credentials": {
+        "imap": {
+          "id": "your-imap-credential-id",
+          "name": "your-imap-credential-name"
+        }
+      }
+    },
+    {
+      "id": "Slack_Message",
+      "name": "Send Slack Message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [400, 100],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "your-slack-channel-id",
+        "jsonParameters": true,
+        "blocks": true,
+        "blockUi": {
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*Access request received from {{ $json[\"from\"] }}:*\n{{ $json[\"text\"] }}\n\nApprove IAM User creation?"
+              }
+            },
+            {
+              "type": "actions",
+              "elements": [
+                {
+                  "type": "button",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Approve"
+                  },
+                  "style": "primary",
+                  "value": "approve_user"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-api-id",
+          "name": "your-slack-api-name"
+        }
+      }
+    },
+    {
+      "id": "Slack_Approve_Webhook",
+      "name": "Slack Interaction Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [600, 100],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-interaction-approve",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "AWS_Create_IAM_User",
+      "name": "Create IAM User",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [800, 100],
+      "parameters": {
+        "operation": "create",
+        "userName": "provisioned-user-{{ $json.body.user.id }}"
+      },
+      "credentials": {
+        "aws": {
+          "id": "your-aws-credential-id",
+          "name": "your-aws-credential-name"
+        }
+      }
+    },
+    {
+      "id": "Slack_Notify",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1000, 100],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "your-slack-channel-id",
+        "text": "IAM user has been successfully created."
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-api-id",
+          "name": "your-slack-api-name"
+        }
+      }
+    },
+    {
+      "id": "Send_Email_Response",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1200, 100],
+      "parameters": {
+        "toEmail": "{{$json[\"from\"]}}",
+        "subject": "IAM Access Approved",
+        "text": "Your access has been granted and the IAM user has been created successfully."
+      },
+      "credentials": {
+        "smtp": {
+          "id": "your-smtp-credential-id",
+          "name": "your-smtp-credential-name"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "IMAP_Email_Trigger": {
+      "main": [
+        [
+          {
+            "node": "Slack_Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack_Message": {
+      "main": [
+        [
+          {
+            "node": "Slack_Approve_Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack_Approve_Webhook": {
+      "main": [
+        [
+          {
+            "node": "AWS_Create_IAM_User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AWS_Create_IAM_User": {
+      "main": [
+        [
+          {
+            "node": "Slack_Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack_Notify": {
+      "main": [
+        [
+          {
+            "node": "Send_Email_Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false
+}
+
