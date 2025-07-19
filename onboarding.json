@@ -1,0 +1,151 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "email": "devops+onboard@your-domain.com",
+        "password": "YOUR_EMAIL_PASSWORD",
+        "host": "imap.your-domain.com",
+        "port": 993,
+        "secure": true,
+        "mailbox": "INBOX",
+        "downloadAttachments": false,
+        "options": {}
+      },
+      "id": "1",
+      "name": "IMAP Email",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [300, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const emailBody = $json.text;
+
+const usernameMatch = emailBody.match(/Username:\s*(\S+)/);
+const emailMatch = emailBody.match(/Email:\s*(\S+)/);
+
+return [
+  {
+    json: {
+      UserName: usernameMatch ? usernameMatch[1] : '',
+      UserEmail: emailMatch ? emailMatch[1] : ''
+    }
+  }
+];"
+      },
+      "id": "2",
+      "name": "Parse Email",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "resource": "user",
+        "operation": "create",
+        "userName": "={{$json.UserName}}"
+      },
+      "id": "3",
+      "name": "AWS IAM Create User",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [700, 100],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_AWS_CREDENTIAL_ID"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "accessKey",
+        "operation": "create",
+        "userName": "={{$json.UserName}}"
+      },
+      "id": "4",
+      "name": "AWS IAM Create Access Key",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [900, 100],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_AWS_CREDENTIAL_ID"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "policy",
+        "operation": "attachToUser",
+        "userName": "={{$json.UserName}}",
+        "policyArn": "arn:aws:iam::aws:policy/ReadOnlyAccess"
+      },
+      "id": "5",
+      "name": "AWS IAM Attach Policy",
+      "type": "n8n-nodes-base.awsIam",
+      "typeVersion": 1,
+      "position": [1100, 100],
+      "credentials": {
+        "aws": {
+          "id": "YOUR_AWS_CREDENTIAL_ID"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@your-domain.com",
+        "toEmail": "={{$json.UserEmail}}",
+        "subject": "Your AWS IAM Credentials",
+        "text": "Hello {{$json.UserName}},\n\nHere are your AWS credentials:\nAccess Key ID: {{$json.AccessKey.AccessKeyId}}\nSecret Access Key: {{$json.AccessKey.SecretAccessKey}}\n\nUse them with the AWS CLI or SDK.\n\nRegards,\nDevOps Team"
+      },
+      "id": "6",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1300, 100],
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_SMTP_CREDENTIAL_ID"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "#devops-onboarding",
+        "text": "✅ New AWS IAM user {{$json.UserName}} created and credentials sent to {{$json.UserEmail}}"
+      },
+      "id": "7",
+      "name": "Slack Notify",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1500, 100],
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1": {
+      "main": [[{"node": "2", "type": "main", "index": 0}]]
+    },
+    "2": {
+      "main": [[{"node": "3", "type": "main", "index": 0}]]
+    },
+    "3": {
+      "main": [[{"node": "4", "type": "main", "index": 0}]]
+    },
+    "4": {
+      "main": [[{"node": "5", "type": "main", "index": 0}]]
+    },
+    "5": {
+      "main": [[{"node": "6", "type": "main", "index": 0}]]
+    },
+    "6": {
+      "main": [[{"node": "7", "type": "main", "index": 0}]]
+    }
+  }
+}
